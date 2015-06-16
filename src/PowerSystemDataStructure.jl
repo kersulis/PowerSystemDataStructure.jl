@@ -22,8 +22,8 @@ export Bus, ConductorModel, ThermalModel, Line, Gen,
 # runLevel3vFull being called.
 
 type Bus # (number of buses in network)x1
-    num::Array{Integer} # bus number
-    ty::Array{Integer}  # bus type (1 = PQ, 2 = PV, 3 = slack)
+    num::Integer        # bus number
+    ty::Integer         # bus type (1 = PQ, 2 = PV, 3 = slack)
     vBase               # base voltage in kV
     vMag                # voltage magnitude in puu
     vAng                # voltage angle in rad
@@ -70,21 +70,21 @@ type Line # (number of lines in network)x1 structure
     # o when tmk = real       ===> TCT ===> tap-ratio (~1) [assumes ykm^sh=0]
     # o when tmk = complex    ===> PST ===> angle (rads)   [assumes ykm^sh=0]
 
-    from::Array{Integer}            # from bus number
-    to::Array{Integer}              # to bus number
-    R                               # resistance (pu)
-    X                               # reactance (pu)
-    B                               # shunt susceptance (pu)
+    from::Integer                   # from bus number
+    to::Integer                     # to bus number
+    r                               # resistance (pu)
+    x                               # reactance (pu)
+    b                               # shunt susceptance (pu)
     sLim                            # 3-phase power rating of line (MVA)
     length                          # length of line (miles) (Level 3 can estimate lengths if data not available)
-    f                               # active power flow on line (pu)
+    flow                            # active power flow on line (pu)
     fLoss                           # active power losses on line (pu)
     q                               # reactive power flow on line (pu)
     qLoss                           # reactive power losses on line (pu)
     delT                            # degrees above thermal line limit (C)
-    isXfrmr::Array{Bool}            # logical specifying if line is a transformer 
-    isTCXfrmr::Array{Bool}          # logical specifying if transformer is tap-changing
-    isPSXfrmr::Array{Bool}          # logical specifying if transformer is phase-shifting
+    isXfrmr::Bool                   # logical specifying if line is a transformer 
+    isTCXfrmr::Bool                 # logical specifying if transformer is tap-changing
+    isPSXfrmr::Bool                 # logical specifying if transformer is phase-shifting
     tap                             # tap ratio (for Xfrmrs)
     phase                           # phase ratio (for Xfrmrs) (rad)
     maxPhase                        # maximum phase shift (rad) 
@@ -94,9 +94,9 @@ type Line # (number of lines in network)x1 structure
 end
 
 type Gen # (number of generators in network)x1 structure
-    bus::Array{Integer}     # bus number of generator
-    ID::Array{Integer}      # generator identifier (not needed)
-    status::Array{Integer}  # 0 = out of service, 1 = in service (not needed: Level 3 assumes all gens are available)
+    bus::Integer            # bus number of generator
+    ID::Integer             # generator identifier (not needed)
+    status::Integer         # 0 = out of service, 1 = in service (not needed: Level 3 assumes all gens are available)
     Pinj                    # active power injection (pu)
     Qinj                    # reactive power injection (pu)
     Pramp                   # active power ramping rate (pu/hr)
@@ -112,7 +112,7 @@ type Gen # (number of generators in network)x1 structure
 end
 
  type Load # (number of loads in network)x1 structure
-    bus::Array{Integer}     # bus number of load
+    bus::Integer            # bus number of load
     Pload                   # active power demand forecast (pu) 1x(number of time intervals) vector
     Qload                   # reactive power demand (pu) 1x(number of time intervals) vector
     Pdemand                 # present active power load (pu)
@@ -214,12 +214,12 @@ type Time # 1x1 structure
 end
 
 type System
-    bus::Bus
-    line::Line
-    gen::Gen
-    load::Load
-    wind::Wind
-    storage::Storage
+    buses::Array{Bus}
+    lines::Array{Line}
+    gens::Array{Gen}
+    loads::Array{Load}
+    wind::Array{Wind}
+    storage::Array{Storage}
     params::Params
     control::Control
     optimize::Optimize
@@ -229,81 +229,98 @@ type System
 end
 
 function mat2sys(mpc)
-    # This function takes an arbitrary Matpower file as input and creates the
-    # basic System structure needed for Level 3.
-
+    """ Convert from caseformat to System structure.
+    """
     baseMVA = mpc["baseMVA"]
 
     # System.bus
     bus = mpc["bus"]
-    
-    BUS = Bus(bus[:,1],
-            bus[:,2],
-            bus[:,10],
-            bus[:,8],
-            bus[:,9]*π/180.,
-            bus[:,5],
-            bus[:,6])
+    BUS = Array(Bus,0)
 
-    branch = mpc["branch"]
+    for i in 1:size(bus,1)
+        push!(BUS,Bus(
+            bus[i,1],
+            bus[i,2],
+            bus[i,10],
+            bus[i,8],
+            bus[i,9]*π/180.,
+            bus[i,5],
+            bus[i,6]
+            ))
+    end
+
     # System.line
-    tap = branch[:,9]
-    tap[tap.==0] = 1
+    branch = mpc["branch"]
+    LINE = Array(Line,0)
 
-    LINE = Line(branch[:,1],
-                branch[:,2],
-                branch[:,3],
-                branch[:,4],
-                branch[:,5],
-                branch[:,6],
-                fill(NaN,length(branch[:,1])),
-                zeros(length(branch[:,1])),
-                zeros(length(branch[:,1])),
-                zeros(length(branch[:,1])),
-                zeros(length(branch[:,1])),
-                -ones(length(branch[:,1])),
-                branch[:,9].!=0,
-                branch[:,9].!=0,
-                falses(length(branch[:,1])),
-                tap,
-                branch[:,10].*pi/180,
-                zeros(length(branch[:,1])),
-                ConductorModel(),
-                ThermalModel(),
-                fill(NaN,length(branch[:,1])))
+    tap = branch[:,9]
+    tap[tap.==0] = 1    
+
+    for i in 1:size(branch,1)
+        push!(LINE,Line(
+            branch[i,1],
+            branch[i,2],
+            branch[i,3],
+            branch[i,4],
+            branch[i,5],
+            branch[i,6],
+            NaN,
+            0,
+            0,
+            0,
+            0,
+            -1,
+            branch[i,9]!=0,
+            branch[i,9]!=0,
+            false,
+            tap[i],
+            branch[i,10]*pi/180,
+            0,
+            ConductorModel(),
+            ThermalModel(),
+            NaN
+            ))
+    end
 
     # System.gen
     gen = mpc["gen"]
     Qmin = gen[:,5]
     Qmax = gen[:,4]
-    GEN = Gen(
-        gen[:,1],
-        ones(length(gen[:,1])),
-        gen[:,8],
-        gen[:,2]./baseMVA,
-        gen[:,3]./baseMVA,
-        zeros(length(gen[:,1])),
-        gen[:,6],
-        gen[:,10]./baseMVA,
-        gen[:,9]./baseMVA,
-        Qmin,#-9999*ones(length(gen[:,1])),
-        Qmax,#9999*ones(length(gen[:,1])),
-        gen[:,9]./(2*baseMVA),
-        -gen[:,9]./(2*baseMVA),
-        gen[:,4]./(2*baseMVA),
-        gen[:,5]./(2*baseMVA)
-        )
+    GEN = Array(Gen,0)
+
+    for i in 1:size(gen,1)
+        push!(GEN,Gen(
+            gen[i,1],
+            1,
+            gen[i,8],
+            gen[i,2]./baseMVA,
+            gen[i,3]./baseMVA,
+            0,
+            gen[i,6],
+            gen[i,10]/baseMVA,
+            gen[i,9]/baseMVA,
+            Qmin,#-9999*ones(length(gen[:,1])),
+            Qmax,#9999*ones(length(gen[:,1])),
+            gen[i,9]/(2*baseMVA),
+            -gen[i,9]/(2*baseMVA),
+            gen[i,4]/(2*baseMVA),
+            gen[i,5]/(2*baseMVA)
+            ))
+    end
 
     # System.load
-    LOAD = Load(
-        bus[:,1],
-        bus[:,3]./100*ones(1,24),
-        bus[:,4]./100*ones(1,24),
-        bus[:,3]./baseMVA,
-        bus[:,4]./baseMVA,
-        zeros(length(bus[:,1])),
-        zeros(length(bus[:,1]))
-        )
+    LOAD = Array(Load,0)
+    for i in 1:size(bus,1)
+        push!(LOAD,Load(
+        bus[i,1],
+        bus[i,3]/100*ones(1,24),
+        bus[i,4]/100*ones(1,24),
+        bus[i,3]/baseMVA,
+        bus[i,4]/baseMVA,
+        0,
+        0
+        ))
+    end
 
     # System.params
     PARAMS = Params()
@@ -315,10 +332,10 @@ function mat2sys(mpc)
 
     # System
     SYSTEM = System()
-    SYSTEM.bus = BUS
-    SYSTEM.line = LINE
-    SYSTEM.gen = GEN
-    SYSTEM.load = LOAD
+    SYSTEM.buses = BUS
+    SYSTEM.lines = LINE
+    SYSTEM.gens = GEN
+    SYSTEM.loads = LOAD
     SYSTEM.params = PARAMS
 
     return SYSTEM
