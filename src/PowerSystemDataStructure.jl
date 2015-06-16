@@ -297,7 +297,7 @@ function mat2sys(mpc)
             gen[i,8],
             gen[i,2]./baseMVA,
             gen[i,3]./baseMVA,
-            1/size(gen,1)
+            1/size(gen,1),
             0,
             gen[i,6],
             gen[i,10]/baseMVA,
