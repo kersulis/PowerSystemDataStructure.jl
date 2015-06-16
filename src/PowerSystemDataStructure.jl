@@ -99,6 +99,7 @@ type Gen # (number of generators in network)x1 structure
     status::Integer         # 0 = out of service, 1 = in service (not needed: Level 3 assumes all gens are available)
     Pinj                    # active power injection (pu)
     Qinj                    # reactive power injection (pu)
+    distFactor              # distribution factor (droop response)
     Pramp                   # active power ramping rate (pu/hr)
     vSet                    # voltage setpoint of generator (pu)
     Pmin                    # min active power injection (pu)
@@ -125,6 +126,7 @@ type Wind # (number of wind farms in network)x1 structure
     bus         # bus number of wind generator
     Pforecast   # forecasted active power production (pu) 1x(number of time intervals) vector
     Pinj        # actual active power production (pu)
+    Qinj
     Pshed       # active power shed from wind forecast through curtailment (pu)
 
     Wind() = new()
@@ -295,6 +297,7 @@ function mat2sys(mpc)
             gen[i,8],
             gen[i,2]./baseMVA,
             gen[i,3]./baseMVA,
+            1/size(gen,1)
             0,
             gen[i,6],
             gen[i,10]/baseMVA,
